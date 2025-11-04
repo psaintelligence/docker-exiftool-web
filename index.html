@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="index.css">
+    <title>File Metadata Extractor</title>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="site-title">File Metadata Extractor</div>
+            <div class="color-bar">
+                <div class="color-segment" style="background-color: #6d597a;"></div>
+            </div>
+        </header>
+
+        <main>
+
+            <!-- Extract Tab -->
+            <div id="extract-tab" class="tab-content active">
+
+                <div class="two-column-layout">
+                    <!-- Left Column: Upload Interface -->
+                    <div class="box">
+                        <div class="box-header">Subject File</div>
+                        <div class="box-body">
+                            <div id="dropzone-extract" class="upload-area">
+                                <p>Drag & drop file here</p>
+                                <p>— or —</p>
+                                <button class="btn">Select File</button>
+                                <input type="file" id="fileInput-extract" class="file-input" />
+                            </div>
+
+                            <div id="selectedFile-extract" style="display: none;" class="selected-file">
+                                <div class="file-info">
+                                    <div id="fileName-extract">filename.jpg</div>
+                                    <div id="fileSize-extract">1.2 MB</div>
+                                </div>
+                                <button id="removeFile-extract" class="remove-btn">×</button>
+                            </div>
+
+                            <div style="margin-top: 2rem;">
+                                <div class="options">
+                                    <label>
+                                        <input type="checkbox" id="jsonOutput-extract">
+                                        JSON Output
+                                    </label>
+                                    <label style="margin-left: 1rem;">
+                                        <input type="checkbox" id="numericalOutput-extract" checked>
+                                        Numerical Values
+                                    </label>
+                                </div>
+
+                                <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                                    <button id="runExifTool-extract" class="btn" disabled>
+                                        <span id="spinner-extract" class="spinner" style="display: none;"></span>
+                                        Extract Metadata
+                                    </button>
+                                    <button id="resetBtn-extract" class="btn btn-secondary" disabled>Reset</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Results -->
+                    <div id="resultContainer-extract" class="result-container">
+                        <div class="box">
+                            <div class="box-header">Extracted Metadata</div>
+                            <div class="box-body">
+                                <div id="status-extract" class="status-message" style="display: none;">
+                                    Metadata extracted successfully!
+                                </div>
+
+                                <pre id="metadataOutput-extract"
+                                    class="metadata-output">Results will appear here after processing.</pre>
+
+                                <div class="action-buttons">
+                                    <button id="copyBtn-extract" class="btn btn-secondary">Copy</button>
+                                    <button id="downloadBtn-extract" class="btn btn-secondary">Download JSON</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <footer>
+            <a
+                href="https://github.com/psaintelligence/docker-exiftool-web"
+                class="nav-item"
+                rel="noopener noreferrer"
+                target="_blank"
+            >Github: PSA Intelligence</a>
+            <a
+                href="https://andrews.substack.com/p/zeroperl-sandboxed-perl-with-webassembly"
+                class="nav-item"
+                rel="noopener noreferrer"
+                target="_blank"
+            >Credit: Andrew Sampson</a>
+        </footer>
+
+    </div>
+
+    <script type="module">
+        import {} from '/index.js';
+    </script>
+
+</body>
+</html>
