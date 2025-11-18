@@ -26,8 +26,9 @@ COPY --from=clone /clone/package*.json ./
 RUN npm ci
 
 COPY --from=clone /clone/. ./
+RUN npm install -g bun
 RUN npm run build
-
+RUN ls -al /app/public/
 
 # ===
 # https://hub.docker.com/_/nginx/tags
@@ -41,8 +42,7 @@ LABEL org.opencontainers.image.source="https://github.com/psaintelligence/docker
 WORKDIR /usr/share/nginx/html
 RUN rm -Rf /usr/share/nginx/html/*
 
-COPY --from=build /app/demo/ ./
-COPY index.html index.js index.css ./
+COPY --from=build /app/public/* ./
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 CMD ["nginx", "-g", "daemon off;"]
