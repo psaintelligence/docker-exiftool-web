@@ -4,7 +4,8 @@ FROM docker.io/alpine/git:latest AS clone
 
 # https://github.com/lucasgelfond/exiftool-web/commits/main/
 # v1.0.5 = 2025-07-24
-ARG COMMIT_TAG="v1.0.5"
+# v1.0.6 = 2025-11-15
+ARG COMMIT_TAG="v1.0.6"
 ARG SOURCE_REPO="https://github.com/6over3/exiftool.git"
 
 WORKDIR /clone
