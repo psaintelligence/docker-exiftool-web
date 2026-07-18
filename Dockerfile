@@ -23,11 +23,11 @@ RUN set -x && \
 FROM docker.io/node:24-alpine AS build
 
 WORKDIR /app
+RUN npm install -g bun
 COPY --from=clone /clone/package*.json ./
 RUN npm ci
 
 COPY --from=clone /clone/. ./
-RUN npm install -g bun
 RUN npm run build
 
 # https://hub.docker.com/r/nginxinc/nginx-unprivileged
