@@ -1,0 +1,24 @@
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# CI
+.github
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# Local development
+/dev/
+/_dev/
+
+# Docs (not needed in image)
+README.md
+LICENSE
+
+# OS
+.DS_Store
+Thumbs.db
