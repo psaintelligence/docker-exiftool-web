@@ -2,6 +2,12 @@ name: dockerhub-description
 
 # ============================================================
 # Project configuration — edit these values for your project.
+#
+# Set DOCKERHUB_REPOSITORY to a non-empty value (namespace/name) to
+# enable the description sync. Leave blank to skip the sync step.
+# For GHCR-only projects, the cleanest approach is to delete this
+# workflow file entirely — that avoids spinning up a runner just to
+# skip the single step.
 # ============================================================
 env:
   DOCKERHUB_REPOSITORY: psaintelligence/exiftool-web
@@ -30,7 +36,6 @@ jobs:
 
   sync-description:
     runs-on: ubuntu-latest
-    if: env.DOCKERHUB_REPOSITORY != ''
 
     steps:
 
@@ -38,6 +43,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Sync Docker Hub description
+        if: env.DOCKERHUB_REPOSITORY != ''
         uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
