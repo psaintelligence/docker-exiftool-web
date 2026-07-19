@@ -8,6 +8,10 @@ Maintained by **[PSA Intelligence](https://github.com/psaintelligence)**.
 
 ## Features
 
+All metadata extraction happens **in the browser** using a WebAssembly build of
+ExifTool - there is no Perl runtime, no file upload endpoint, and no persistence 
+layer in this container.
+
 - **Fully client-side** - files never leave the browser; metadata extraction runs
   locally via WebAssembly.
 - **Static hosting** - served as a single nginx container, trivially deployable
@@ -77,17 +81,6 @@ docker run --rm -p 8080:8080 exiftool-web:local
 ```
 
 See the [`Dockerfile`](./Dockerfile) for the full multi-stage build definition.
-
-## How it works
-
-1. **`clone` stage** - fetches `6over3/exiftool` at the pinned `COMMIT_TAG`.
-2. **`build` stage** - `node:24-alpine` installs deps and runs `npm run build`
-   to produce the static SPA in `/app/public`.
-3. **`production` stage** - `nginx:alpine` serves the static output on port 8080.
-
-All metadata extraction happens **in the browser** using a WebAssembly build of
-ExifTool - there is no Perl runtime, no file upload endpoint, and no persistence
-layer in this container.
 
 ## Credits
 

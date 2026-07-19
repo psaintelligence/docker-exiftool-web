@@ -1,0 +1,47 @@
+name: dockerhub-description
+
+# ============================================================
+# Project configuration — edit these values for your project.
+# ============================================================
+env:
+  DOCKERHUB_REPOSITORY: psaintelligence/exiftool-web
+
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'README.md'
+
+
+permissions:
+  contents: read
+
+
+# Cancel superseded runs — only one description sync needs to land.
+concurrency:
+  group: dockerhub-description-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+
+  sync-description:
+    runs-on: ubuntu-latest
+    if: env.DOCKERHUB_REPOSITORY != ''
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Sync Docker Hub description
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_REPOSITORY }}
+          readme-filepath: ./README.md
+          enable-url-completion: true

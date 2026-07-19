@@ -1,0 +1,249 @@
+name: docker-publish
+
+# ============================================================
+# Project configuration - edit these values for your project.
+# No other project-specific values are hardcoded below; everything
+# else is derived from these or from GitHub context.
+#
+# Registry gating: each registry is enabled by setting its image
+# variable to a non-empty value. Leave either blank to skip that
+# registry entirely (login, tagging, and push are all conditional).
+#   - Both set           → publish to both Docker Hub + GHCR
+#   - DOCKERHUB_IMAGE only → publish to Docker Hub only
+#   - GHCR_IMAGE only      → publish to GHCR only
+#
+# Optional overrides (defaults shown inline where used below):
+#   DEV_BRANCH                 (default: dev)
+#   TRIVY_SEVERITY             (default: HIGH,CRITICAL)
+#   ARTIFACT_RETENTION_DAYS    (default: 30)
+# To override any of these, add a line to the env: block below.
+# ============================================================
+env:
+  # Docker Hub image (namespace/name). Leave blank to skip Docker Hub.
+  DOCKERHUB_IMAGE: psaintelligence/exiftool-web
+  # GHCR image (ghcr.io/namespace/name). Leave blank to skip GHCR.
+  GHCR_IMAGE: ghcr.io/psaintelligence/exiftool-web
+  # Trivy severity to block publish on (v* tags only). Leave blank to NEVER block.
+  TRIVY_SEVERITY_BLOCK_PUBLISH: CRITICAL
+
+on:
+  push:
+    branches:
+      - dev
+    tags:
+      - 'v*'
+
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write  # Required to upload Trivy SARIF to GitHub Security tab
+
+
+# Cancel superseded runs on the same ref (e.g., double-push to dev, or a tag re-push).
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ============================================================
+      # Setup - checkout, registry logins, buildx, tag metadata
+      # ============================================================
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Login to Docker Hub
+        if: env.DOCKERHUB_IMAGE != ''
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GHCR
+        if: env.GHCR_IMAGE != ''
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Configure build targets
+        id: targets
+        env:
+          DOCKERHUB_IMAGE: ${{ env.DOCKERHUB_IMAGE }}
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+        run: |
+          {
+            echo "images<<EOF"
+            [ -n "$DOCKERHUB_IMAGE" ] && echo "$DOCKERHUB_IMAGE"
+            [ -n "$GHCR_IMAGE" ]      && echo "$GHCR_IMAGE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.targets.outputs.images }}
+          tags: |
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=tag
+            type=sha,prefix=dev-,enable=${{ github.ref_name == (env.DEV_BRANCH || 'dev') }}
+
+      # ============================================================
+      # Build - validate, then build image locally (load, no push)
+      # with all final tags. Trivy scans this local image; the same
+      # image is pushed after the scan passes.
+      # ============================================================
+      - name: Validate build configuration
+        uses: docker/build-push-action@v7
+        with:
+          call: check
+
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Get scan target
+        id: scan-target
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: echo "image=$(echo "$TAGS" | head -n1)" >> "$GITHUB_OUTPUT"
+
+      # ============================================================
+      # Scan - Trivy vulnerability scan + CycloneDX SBOM.
+      #
+      # Single-scan design using `trivy convert` to derive formats:
+      #   1. Scan (always): scans once, outputs JSON. Never exits.
+      #      Default severity: HIGH,CRITICAL. ignore-unfixed: true.
+      #      The trivy-action installs the trivy binary on the runner
+      #      via setup-trivy, so subsequent steps call `trivy convert`
+      #      directly - no Docker image needed, no version sync problem.
+      #   2. Convert to SARIF (always): derives SARIF from JSON for
+      #      the GitHub Security tab + artifact.
+      #   3. Upload all reports (SARIF, JSON, SBOM) - always runs so
+      #      reports are available for forensics even if the gate fails.
+      #   4. Publish gate (v* tags only, if TRIVY_SEVERITY_BLOCK_PUBLISH
+      #      is set): runs LAST, after all uploads. Derives a filtered
+      #      table from the JSON report and exits 1 if findings match,
+      #      preventing the publish. This ordering ensures reports are
+      #      already uploaded when the gate trips.
+      # ============================================================
+      - name: Cache Trivy database
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
+
+      # Trivy action is pinned by commit SHA for supply-chain security.
+      # The subsequent `trivy convert` calls use that same binary, so there
+      # is no version drift between scan and convert.
+      # Find the latest release tag and its pinned SHA at:
+      # https://github.com/aquasecurity/trivy-action/releases
+
+      - name: Run Trivy vulnerability scanner
+        id: scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: ${{ steps.scan-target.outputs.image }}
+          format: json
+          output: trivy-results.json
+          scanners: vuln
+          severity: ${{ env.TRIVY_SEVERITY || 'HIGH,CRITICAL' }}
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Convert report to SARIF
+        if: always() && steps.scan.outcome == 'success'
+        run: |
+          trivy convert \
+            --format sarif \
+            --output trivy-results.sarif \
+            trivy-results.json
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@v7
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        with:
+          name: trivy-sarif
+          path: trivy-results.sarif
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS || '30' }}
+
+      - name: Upload JSON report artifact
+        uses: actions/upload-artifact@v7
+        if: always() && hashFiles('trivy-results.json') != ''
+        with:
+          name: trivy-json
+          path: trivy-results.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS || '30' }}
+
+      - name: Generate SBOM (CycloneDX)
+        if: always() && steps.build.outcome == 'success'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: ${{ steps.scan-target.outputs.image }}
+          format: cyclonedx
+          output: sbom.json
+          skip-setup-trivy: true
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v7
+        if: always() && hashFiles('sbom.json') != ''
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS || '30' }}
+
+      # ============================================================
+      # Publish gate - runs AFTER all reports are uploaded so that
+      # if it trips, the SARIF/JSON/SBOM are already available for
+      # forensics. Exits 1 if findings match TRIVY_SEVERITY_BLOCK_PUBLISH,
+      # which blocks the subsequent Push step (Push has no `if: always()`).
+      # ============================================================
+      - name: Run Trivy publish gate
+        if: startsWith(github.ref, 'refs/tags/v') && env.TRIVY_SEVERITY_BLOCK_PUBLISH != ''
+        run: |
+          trivy convert \
+            --format table \
+            --scanners vuln \
+            --severity ${{ env.TRIVY_SEVERITY_BLOCK_PUBLISH }} \
+            --exit-code 1 \
+            trivy-results.json
+
+      # ============================================================
+      # Push - push the already-built, already-scanned local image
+      # to all registries (Docker Hub + GHCR).
+      # ============================================================
+      - name: Push image
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo ":: Pushing $tag"
+              docker push "$tag"
+            fi
+          done <<< "$TAGS"
