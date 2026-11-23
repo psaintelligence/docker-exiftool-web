@@ -30,9 +30,9 @@ RUN npm ci
 COPY --from=clone /clone/. ./
 RUN npm run build
 
-# https://hub.docker.com/r/nginxinc/nginx-unprivileged
+# https://hub.docker.com/r/nginx/nginx-unprivileged
 # nginx-unprivileged runs the master process as non-root (uid 101) and listens on 8080.
-FROM docker.io/nginxinc/nginx-unprivileged:alpine AS production
+FROM docker.io/nginx/nginx-unprivileged:alpine AS production
 
 # OCI Labels
 LABEL org.opencontainers.image.title="Docker Exiftool Web"
